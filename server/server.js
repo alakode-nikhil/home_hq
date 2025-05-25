@@ -1,15 +1,19 @@
-const express = require('express');
-const dotenv = require('dotenv');
-const cors = require('cors');
+import express, { json } from 'express';
+import { config } from 'dotenv';
+import cors from 'cors';
+import connectDB from './config/db.js'; // Import the database connection function
 
 // Load environment variables from .env file
-dotenv.config();
+config({ path: './.env' }); // Explicitly specify path if .env is in server folder
+
+// Connect to MongoDB
+connectDB();
 
 const app = express();
 
 // Middleware
-app.use(express.json()); // For parsing JSON request bodies
-app.use(cors()); // Enable CORS for all routes
+app.use(json());
+app.use(cors());
 
 // Basic route
 app.get('/', (req, res) => {

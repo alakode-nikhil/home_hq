@@ -1,0 +1,21 @@
+import createError from 'http-errors';
+
+// Not Found Middleware (Handles 404 errors for non-existent routes)
+const notFound = (req, res, next) => {
+    const error = createError(404, `Not Found - ${req.originalUrl}`);
+    next(error); // Pass the error to the next middleware
+};
+
+// Generic Error Handling Middleware
+const errorHandler = (err, req, res, next) => {
+    // Set status code: default to 500 if not already set by an error
+    const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+    res.status(statusCode);
+
+    res.json({
+        message: err.message,
+        stack: process.env.NODE_ENV === 'production' ? null : err.stack, // Show stack trace only in development
+    });
+};
+
+export default { notFound, errorHandler };

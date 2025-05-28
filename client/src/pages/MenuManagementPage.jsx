@@ -3,12 +3,13 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Button, TextField, Dialog, DialogActions,
     DialogContent, DialogTitle, List, ListItem, ListItemText,
-    IconButton, ListItemSecondaryAction, Paper, Alert, CircularProgress,
+    IconButton, Paper, Alert, CircularProgress,
     Snackbar
 } from '@mui/material';
-import { Edit, Delete } from '@mui/icons-material';
+import { Edit, Delete, ChevronRight } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext'; // To get the token
+import {Link as RouterLink } from 'react-router-dom';
 
 const MenuManagementPage = () => {
     const { token } = useAuth(); // Get the authentication token
@@ -156,7 +157,7 @@ const MenuManagementPage = () => {
                 variant="contained"
                 color="primary"
                 onClick={handleOpenAddDialog}
-                disabled={isAddButtonDisabled} // Disable if limit reached
+                disabled={isAddButtonDisabled}
                 sx={{ mb: 3 }}
             >
                 {isAddButtonDisabled ? 'Maximum 10 Menus Reached' : 'Add New Menu'}
@@ -175,25 +176,36 @@ const MenuManagementPage = () => {
                     <List>
                         {menus.map((menu) => (
                             <ListItem
-                            key={menu._id}
-                            divider
-                            secondaryAction={
-                                <>
-                                <IconButton edge="end" aria-label="edit" onClick={() => handleOpenEditDialog(menu)}>
-                                    <Edit />
-                                </IconButton>
-                                <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteMenu(menu._id)}>
-                                    <Delete />
-                                </IconButton>
-                                </>
-                            }
-                            >
-                            <ListItemText
-                                primary={menu.name}
-                                secondary={`ID: ${menu.menuId} | Order: ${menu.order}`}
-                            />
-                        </ListItem>
+                                key={menu._id}
+                                divider
+                                secondaryAction={
+                                    <>
+                                    {/* NEW: Button to navigate to Submenu Management */}
+                                    <IconButton
+                                        edge="end"
+                                        aria-label="manage-submenus"
+                                        component={RouterLink} // Use RouterLink for navigation
+                                        to={`/admin/menus/${menu._id}/submenus`} // Dynamic URL based on menu._id
+                                        sx={{ mr: 1 }} // Add some margin
+                                    >
+                                        <ChevronRight />
+                                    </IconButton>
 
+                                    {/* Existing Edit and Delete buttons */}
+                                    <IconButton edge="end" aria-label="edit" onClick={() => handleOpenEditDialog(menu)}>
+                                        <Edit />
+                                    </IconButton>
+                                    <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteMenu(menu._id)}>
+                                        <Delete />
+                                    </IconButton>
+                                    </>
+                                }
+                                >
+                            <ListItemText
+                            primary={menu.name}
+                            secondary={`ID: ${menu.menuId} | Order: ${menu.order}`}
+                        />
+                        </ListItem>
                         ))}
                     </List>
                 </Paper>

@@ -52,6 +52,25 @@ export const createMenu = asyncHandler(async (req, res) => {
     res.status(201).json(menu); // 201 Created status, respond with the new menu object
 });
 
+// In server/controllers/menuController.js
+
+// @desc    Get a single menu by ID
+// @route   GET /api/menus/:id
+// @access  Public (Needed for displaying parent menu name)
+export const getMenuById = asyncHandler(async (req, res) => {
+    // Find the menu by its MongoDB ObjectId (_id)
+    const menu = await Menu.findById(req.params.id);
+
+    if (!menu) {
+        // If no menu is found with the given ID, send a 404 Not Found error
+        res.status(404);
+        throw new Error('Menu not found');
+    }
+
+    // If the menu is found, send it back with a 200 OK status
+    res.status(200).json(menu);
+});
+
 // @desc    Update a menu
 // @route   PUT /api/menus/:id
 // @access  Private/Admin

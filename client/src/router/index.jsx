@@ -4,6 +4,7 @@ import RegisterPage from '../pages/RegisterPage';
 import AdminDashboardPage from '../pages/AdminDashboardPage';
 import DashboardPage from '../pages/DashboardPage';
 import MenuManagementPage from '../pages/MenuManagementPage';
+import SubmenuManagementPage from '../pages/SubmenuManagementPage';
 import HomePage from '../pages/HomePage';
 import AuthLayout from '../layouts/AuthLayout';
 import MainLayout from '../layouts/MainLayout';
@@ -72,6 +73,14 @@ const router = createBrowserRouter([
                 element: (
                     <AdminRoute>
                         <MenuManagementPage />
+                    </AdminRoute>
+                ),
+            },
+            {
+                path: '/admin/menus/:menuId/submenus', // NEW DYNAMIC ROUTE for Submenu Management
+                element: (
+                    <AdminRoute>
+                        <SubmenuManagementPage />
                     </AdminRoute>
                 ),
             },

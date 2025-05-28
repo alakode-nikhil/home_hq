@@ -1,7 +1,7 @@
 // my-web-app/server/routes/menuRoutes.js
 
 import { Router } from 'express';
-import { getMenus, createMenu, updateMenu, deleteMenu } from '../controllers/menuController.js'; // Import menu controller functions
+import { getMenus, createMenu, updateMenu, deleteMenu, getMenuById } from '../controllers/menuController.js'; // Import menu controller functions
 
 import { protect } from '../middlewares/authMiddleware.js'; // Import authentication middleware
 import { authorizeRoles } from '../middlewares/rbacMiddleware.js'; // Import RBAC middleware
@@ -17,6 +17,7 @@ const router = Router();
 // Fetches a list of all menus. This is public because the navigation structure
 // typically needs to be visible to all users.
 router.get('/', getMenus);
+router.get('/:id', getMenuById);
 
 // -------------------------------------------------------------------
 // Private/Admin-Only Routes (Requires authentication and 'admin' role)

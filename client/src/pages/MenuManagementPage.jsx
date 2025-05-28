@@ -180,17 +180,16 @@ const MenuManagementPage = () => {
                                 divider
                                 secondaryAction={
                                     <>
-                                    {/* NEW: Button to navigate to Submenu Management */}
+                                    {/* UPDATED: Link to the new generic children management page */}
                                     <IconButton
                                         edge="end"
-                                        aria-label="manage-submenus"
-                                        component={RouterLink} // Use RouterLink for navigation
-                                        to={`/admin/menus/${menu._id}/submenus`} // Dynamic URL based on menu._id
-                                        sx={{ mr: 1 }} // Add some margin
+                                        aria-label="manage-children"
+                                        component={RouterLink}
+                                        to={`/admin/nav/Menu/${menu._id}/children`} // Pass 'Menu' as parentModel and menu._id as parentId
+                                        sx={{ mr: 1 }}
                                     >
                                         <ChevronRight />
                                     </IconButton>
-
                                     {/* Existing Edit and Delete buttons */}
                                     <IconButton edge="end" aria-label="edit" onClick={() => handleOpenEditDialog(menu)}>
                                         <Edit />
@@ -201,15 +200,17 @@ const MenuManagementPage = () => {
                                     </>
                                 }
                                 >
-                            <ListItemText
-                            primary={menu.name}
-                            secondary={`ID: ${menu.menuId} | Order: ${menu.order}`}
-                        />
-                        </ListItem>
+                                <ListItemText
+                                    primary={menu.name}
+                                    secondary={`ID: ${menu.menuId} | Order: ${menu.order}`}
+                                />
+                            </ListItem>
+
                         ))}
                     </List>
                 </Paper>
             )}
+
 
             {/* Add/Edit Menu Dialog */}
             <Dialog open={openDialog} onClose={handleCloseDialog}>

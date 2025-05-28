@@ -1,142 +1,174 @@
+// my-web-app/server/controllers/submenuController.js
 import asyncHandler from 'express-async-handler';
 import { Submenu } from '../models/Submenu.js';
-import { Menu } from '../models/Menu.js'; // Imported to check if parent menu exists
-import { Types } from 'mongoose'; // Imported for ObjectId validation (e.g., isValid)
+import { Menu } from '../models/Menu.js'; // Still needed to find Menu parents
+import { Types } from 'mongoose'; // For ObjectId validation
 
-// @desc    Get all submenus or submenus for a specific menu
-// @route   GET /api/submenus?menuId=<ID>
-// @access  Public (Anyone can see the submenu structure)
-export const getSubmenus = asyncHandler(async (req, res) => {
-    const { menuId } = req.query; // Get menuId from query parameters (e.g., ?menuId=60f...)
-
-    let query = {};
-    if (menuId) {
-        // Validate that the provided menuId is a valid MongoDB ObjectId format
-        if (!Types.ObjectId.isValid(menuId)) {
-            res.status(400); // Bad request status
-            throw new Error('Invalid Menu ID format provided in query parameter.');
-        }
-        query.menuId = menuId; // Filter submenus by this menuId
+// Utility function to validate parent existence and apply 5-child limit
+export const validateParentAndLimit = async (parentId, parentModel, currentSubmenuId = null) => {
+    // Validate parentId format
+    if (!Types.ObjectId.isValid(parentId)) {
+        const error = new Error('Invalid Parent ID format.');
+        error.statusCode = 400; // Custom property for error handling
+        throw error;
     }
 
-    const submenus = await Submenu.find(query).sort('order'); // Find and sort by 'order'
+    let parentDocument;
+    if (parentModel === 'Menu') {
+        parentDocument = await Menu.findById(parentId);
+    } else if (parentModel === 'Submenu') {
+        parentDocument = await Submenu.findById(parentId);
+    } else {
+        const error = new Error('Invalid parentModel type. Must be "Menu" or "Submenu".');
+        error.statusCode = 400;
+        throw error;
+    }
 
-    res.status(200).json(submenus); // Respond with the found submenus
+    if (!parentDocument) {
+        const error = new Error(`${parentModel} parent not found with the provided ID.`);
+        error.statusCode = 404;
+        throw error;
+    }
+
+    // Apply 5-child limit
+    // Count submenus that have this parentId and parentModel
+    let query = { parentId: parentId, parentModel: parentModel };
+    if (currentSubmenuId) {
+        // When updating, exclude the current submenu itself from the count
+        query._id = { $ne: currentSubmenuId };
+    }
+    const submenusCount = await Submenu.countDocuments(query);
+
+    if (submenusCount >= 5) {
+        const error = new Error(`Maximum of 5 submenus allowed for this <span class="math-inline">\{parentModel\.toLowerCase\(\)\} parent "</span>{parentDocument.name}". Cannot create more.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return parentDocument; // Return the parent document for reference (e.g., its name)
+};
+
+// @desc    Get submenus based on parent
+// @route   GET /api/submenus?parentId=<ID>&parentModel=<TYPE>
+// @access  Public
+export const getSubmenus = asyncHandler(async (req, res) => {
+    const { parentId, parentModel } = req.query; // Get parentId and parentModel from query parameters
+
+    // --- ADD THESE CONSOLE.LOGS ---
+    console.log('Backend: getSubmenus received:');
+    console.log('  Query parentId:', parentId);
+    console.log('  Query parentModel:', parentModel);
+    console.log('  Is parentId a valid ObjectId?', Types.ObjectId.isValid(parentId));
+    console.log('  Is parentModel "Menu" or "Submenu"?', ['Menu', 'Submenu'].includes(parentModel));
+    // --- END CONSOLE.LOGS ---
+
+    let query = {};
+    if (parentId && parentModel) {
+        if (!Types.ObjectId.isValid(parentId)) {
+            res.status(400);
+            throw new Error('Invalid Parent ID format provided.');
+        }
+        if (!['Menu', 'Submenu'].includes(parentModel)) {
+            res.status(400);
+            throw new Error('Invalid Parent Model type. Must be "Menu" or "Submenu".');
+        }
+        query.parentId = parentId;
+        query.parentModel = parentModel;
+    } else if (parentId || parentModel) { // If only one is provided
+        res.status(400);
+        throw new Error('Both parentId and parentModel must be provided for filtered submenus.');
+    }
+
+    const submenus = await Submenu.find(query).sort('order');
+
+    res.status(200).json(submenus);
 });
 
 // @desc    Create a new submenu
 // @route   POST /api/submenus
 // @access  Private/Admin
 export const createSubmenu = asyncHandler(async (req, res) => {
-    const { name, menuId, templateType, order, contentItems } = req.body; // contentItems is now accepted
+    const { name, parentId, parentModel, templateType, order, contentItems } = req.body;
 
-    // Basic validation for required fields
-    if (!name || !menuId || !templateType) {
+    if (!name || !parentId || !parentModel || !templateType) {
         res.status(400);
-        throw new Error('Please include all required fields: name, menuId, templateType');
+        throw new Error('Please include all required fields: name, parentId, parentModel, templateType');
     }
 
-    // Validate menuId format (ensure it's a valid MongoDB ObjectId string)
-    if (!Types.ObjectId.isValid(menuId)) {
-        res.status(400);
-        throw new Error('Invalid Menu ID format.');
+    // Validate parent and apply 5-child limit
+    try {
+        await validateParentAndLimit(parentId, parentModel);
+    } catch (error) {
+        res.status(error.statusCode || 500); // Use custom status code if available
+        throw new Error(error.message);
     }
 
-    // Check if the parent menu actually exists in the database
-    const parentMenu = await Menu.findById(menuId);
-    if (!parentMenu) {
-        res.status(404); // Not Found status
-        throw new Error('Parent menu not found with the provided ID.');
-    }
-
-    // --- CHANGE IMPLEMENTED HERE: Implement 5 Submenu Limit per Menu ---
-    // Count existing submenus specifically for this parent menuId
-    const submenusCount = await Submenu.countDocuments({ menuId });
-    // If the count is 5 or more, prevent creation
-    if (submenusCount >= 5) {
-        res.status(400); // Bad request status
-        throw new Error(`Maximum of 5 submenus allowed for menu "${parentMenu.name}". Cannot create more.`);
-    }
-    // --- END CHANGE ---
-
-    // Prepare the data for the new submenu
     const submenuData = {
         name,
-        menuId,
+        parentId,
+        parentModel,
         templateType,
-        order: order !== undefined ? order : 0, // Use provided order or default
+        order: order !== undefined ? order : 0,
     };
 
-    // --- CHANGE IMPLEMENTED HERE: Handle contentItems based on templateType ---
-    // If the templateType is NOT 'submenu' (i.e., 'grid', 'gallery', 'table')
-    // AND contentItems were provided in the request body, then add them.
+    // Handle contentItems based on templateType, as before
     if (templateType !== 'submenu' && contentItems !== undefined) {
-        if (!Array.isArray(contentItems)) { // Basic type check for contentItems
+        if (!Array.isArray(contentItems)) {
             res.status(400);
             throw new Error('Content items must be an array.');
         }
         submenuData.contentItems = contentItems;
+    } else if (templateType === 'submenu') {
+        submenuData.contentItems = []; // Ensure no content for 'submenu' type
     }
-    // Optional: You could add a warning/error here if contentItems are provided for 'submenu' type,
-    // but the current logic simply ignores them for 'submenu' types.
-    // else if (templateType === 'submenu' && contentItems !== undefined && contentItems.length > 0) {
-    //     console.warn(`Warning: contentItems provided for 'submenu' type. They will be ignored.`);
-    // }
-    // --- END CHANGE ---
 
-    const submenu = await Submenu.create(submenuData); // Create the new submenu document
+    const submenu = await Submenu.create(submenuData);
 
-    res.status(201).json(submenu); // 201 Created status, respond with the new submenu object
+    res.status(201).json(submenu);
 });
 
 // @desc    Update a submenu
 // @route   PUT /api/submenus/:id
 // @access  Private/Admin
 export const updateSubmenu = asyncHandler(async (req, res) => {
-    const { id } = req.params; // Get the MongoDB ObjectId of the submenu to update
-    const { name, menuId, templateType, order, contentItems } = req.body; // contentItems is now accepted
+    const { id } = req.params;
+    const { name, parentId, parentModel, templateType, order, contentItems } = req.body;
 
-    const submenu = await Submenu.findById(id); // Find the submenu by its MongoDB ObjectId
+    const submenu = await Submenu.findById(id);
 
     if (!submenu) {
-        res.status(404); // Not Found status
+        res.status(404);
         throw new Error('Submenu not found');
     }
 
-    // If a new menuId is provided and it's different from the current one
-    if (menuId && menuId !== submenu.menuId.toString()) {
-        if (!Types.ObjectId.isValid(menuId)) {
-            res.status(400);
-            throw new Error('Invalid Menu ID format.');
+    // Check for parent change and apply limit if changed
+    if (parentId && parentModel) {
+        const isParentChanged = submenu.parentId.toString() !== parentId.toString() || submenu.parentModel !== parentModel;
+
+        if (isParentChanged) {
+            try {
+                // Pass currentSubmenuId to exclude it from the count for the new parent
+                await validateParentAndLimit(parentId, parentModel, submenu._id);
+            } catch (error) {
+                res.status(error.statusCode || 500);
+                throw new Error(error.message);
+            }
+            submenu.parentId = parentId;
+            submenu.parentModel = parentModel;
         }
-        const parentMenu = await Menu.findById(menuId);
-        if (!parentMenu) {
-            res.status(404);
-            throw new Error('New parent menu not found.');
-        }
-        // --- CHANGE IMPLEMENTED HERE: Re-check 5 Submenu Limit if changing parent menu ---
-        // If we are moving this submenu to a different parent menu,
-        // we must check if the *new* parent menu already has 5 submenus.
-        const submenusCount = await Submenu.countDocuments({ menuId });
-        if (submenusCount >= 5) {
-            res.status(400);
-            throw new Error(`Maximum of 5 submenus allowed for new parent menu "${parentMenu.name}". Cannot move submenu.`);
-        }
-        // --- END CHANGE ---
-        submenu.menuId = menuId; // Update the parent menu reference
+    } else if (parentId || parentModel) { // If only one of parentId/parentModel is provided in update
+        res.status(400);
+        throw new Error('Both parentId and parentModel must be provided if changing parent.');
     }
 
-    // Update basic fields if provided in the request body
+
     submenu.name = name || submenu.name;
-    submenu.templateType = templateType || submenu.templateType;
     submenu.order = order !== undefined ? order : submenu.order;
 
-    // --- CHANGE IMPLEMENTED HERE: Handle contentItems update based on templateType ---
-    // Determine the effective template type (new one if provided, else existing)
-    const effectiveTemplateType = templateType || submenu.templateType;
+    // Handle templateType and contentItems
+    const effectiveTemplateType = templateType || submenu.templateType; // Use new or existing templateType
 
     if (effectiveTemplateType !== 'submenu') {
-        // If the template type is not 'submenu', allow updating contentItems
         if (contentItems !== undefined) {
             if (!Array.isArray(contentItems)) {
                 res.status(400);
@@ -145,39 +177,58 @@ export const updateSubmenu = asyncHandler(async (req, res) => {
             submenu.contentItems = contentItems;
         }
     } else {
-        // If the template type IS 'submenu' (or being changed to 'submenu'):
-        // If contentItems are provided in the body (and it's a 'submenu' type), warn/ignore.
-        if (contentItems !== undefined && contentItems.length > 0) {
-             console.warn(`Warning: contentItems provided for 'submenu' type during update. They will be ignored.`);
-        }
-        // IMPORTANT: If changing to 'submenu' type, ensure contentItems are cleared.
-        // This prevents old content from 'grid'/'gallery'/'table' from persisting.
-        if(templateType === 'submenu' && submenu.templateType !== 'submenu'){
-            submenu.contentItems = []; // Explicitly clear contentItems if type changes to 'submenu'
-        }
+        // If the template type IS 'submenu' (or being changed to 'submenu'), clear contentItems
+        submenu.contentItems = [];
     }
-    // --- END CHANGE ---
 
-    const updatedSubmenu = await submenu.save(); // Save the updated submenu document
+    // Update templateType itself
+    if (templateType !== undefined) {
+        submenu.templateType = templateType;
+    }
 
-    res.status(200).json(updatedSubmenu); // 200 OK status, respond with updated submenu object
+    const updatedSubmenu = await submenu.save();
+
+    res.status(200).json(updatedSubmenu);
 });
 
 // @desc    Delete a submenu
 // @route   DELETE /api/submenus/:id
 // @access  Private/Admin
 export const deleteSubmenu = asyncHandler(async (req, res) => {
-    const { id } = req.params; // Get the MongoDB ObjectId of the submenu to delete
+    const { id } = req.params;
 
-    const submenu = await Submenu.findById(id); // Find the submenu by its MongoDB ObjectId
+    const submenu = await Submenu.findById(id);
 
     if (!submenu) {
-        res.status(404); // Not Found status
+        res.status(404);
         throw new Error('Submenu not found');
     }
 
-    // Delete the submenu document from the database
+    // IMPORTANT: If deleting a submenu that has children (templateType: 'submenu' and has sub-submenus),
+    // you might want to consider:
+    // 1. Preventing deletion if it has children.
+    // 2. Deleting all its children (cascading delete).
+    // 3. Re-parenting its children.
+    // For simplicity, we are currently not handling cascading deletion or prevention.
+    // The frontend should ideally prompt the user about potential orphaned sub-submenus.
+
     await submenu.deleteOne();
 
-    res.status(200).json({ message: 'Submenu removed' }); // 200 OK status, respond with success message
+    res.status(200).json({ message: 'Submenu removed' });
 });
+
+
+// @desc    Get a single submenu by ID
+// @route   GET /api/submenus/:id
+// @access  Public (Can be used by frontend for editing or displaying standalone content)
+export const getSubmenuById = asyncHandler(async (req, res) => {
+    const submenu = await Submenu.findById(req.params.id);
+
+    if (!submenu) {
+        res.status(404);
+        throw new Error('Submenu not found');
+    }
+
+    res.status(200).json(submenu);
+});
+

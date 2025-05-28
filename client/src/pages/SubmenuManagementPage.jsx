@@ -1,53 +1,67 @@
-// client/src/pages/SubmenuManagementPage.jsx
+// client/src/pages/SubmenuManagementPage.jsx (now handles children of Menus or Submenus)
 import React, { useState, useEffect } from 'react';
 import { useParams, Link as RouterLink } from 'react-router-dom';
 import {
     Box, Typography, Button, TextField, Dialog, DialogActions,
-    DialogContent, DialogTitle, List, ListItem, ListItemText,
-    ListItemSecondaryAction, IconButton, Paper, Alert, CircularProgress,
+    DialogContent, DialogTitle, List, ListItem, ListItemText, IconButton, Paper, Alert, CircularProgress,
     Snackbar, Select, MenuItem, InputLabel, FormControl, Breadcrumbs
 } from '@mui/material';
-import { Edit, Delete, ArrowBack } from '@mui/icons-material';
+import { Edit, Delete, ArrowBack, AddCircleOutline } from '@mui/icons-material'; // Added AddCircleOutline
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
-const SubmenuManagementPage = () => {
-    const { menuId } = useParams(); // Get menuId from URL (e.g., /admin/menus/abc123/submenus)
+const ChildrenManagementPage = () => { // Renamed component for clarity
+    // Get parentId and parentModel from URL (e.g., /admin/nav/Menu/abc12345/children)
+    const { parentModel, parentId } = useParams();
+    console.log('useParams extracted:');
+    console.log('parentid:', parentId);
+    console.log('parentModel:', parentModel);
+
     const { token } = useAuth();
-    const [submenus, setSubmenus] = useState([]);
-    const [menuName, setMenuName] = useState(''); // To display the parent menu's name
+
+    const [children, setChildren] = useState([]); // Now 'children' instead of 'submenus'
+    const [parentName, setParentName] = useState(''); // To display the parent's name
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarSeverity, setSnackbarSeverity] = useState('success');
 
-    // State for Dialog (Add/Edit Submenu)
+    // State for Dialog (Add/Edit Child)
     const [openDialog, setOpenDialog] = useState(false);
-    const [currentSubmenu, setCurrentSubmenu] = useState(null); // Submenu being edited, null for adding
-    const [submenuName, setSubmenuName] = useState('');
-    const [submenuOrder, setSubmenuOrder] = useState(0);
+    const [currentChild, setCurrentChild] = useState(null); // Child being edited, null for adding
+    const [childName, setChildName] = useState('');
+    const [childOrder, setChildOrder] = useState(0);
     const [templateType, setTemplateType] = useState('');
     const [contentItems, setContentItems] = useState(''); // Store as JSON string for now
 
-    // Fetch Parent Menu Name and Submenus
+    // Fetch Parent Name and Children
     const fetchData = async () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch parent menu details to display its name
-            const menuRes = await axios.get(`/menus/${menuId}`); // Assuming you can GET a single menu by _id
-            setMenuName(menuRes.data.name);
+            let parentRes;
+            // Determine which endpoint to call based on parentModel
+            if (parentModel === 'Menu') {
+                parentRes = await axios.get(`/menus/${parentId}`);
+            } else if (parentModel === 'Submenu') {
+                parentRes = await axios.get(`/submenus/${parentId}`);
+            } else {
+                throw new Error('Invalid parent model specified in URL.');
+            }
+            setParentName(parentRes.data.name);
+            console.log('Attempting to fetch children with URL:', `/submenus?parentId=<span class="math-inline">\{parentId\}&parentModel\=</span>{parentModel}`);
 
-            // Fetch submenus for this menuId
-            const submenuRes = await axios.get(`/submenus?menuId=${menuId}`);
+            // Fetch children for this parentId and parentModel
+            const childrenRes = await axios.get(`/submenus?parentId=${parentId}&parentModel=${parentModel}`);
+
             // Sort by 'order' for consistent display
-            setSubmenus(submenuRes.data.sort((a, b) => a.order - b.order));
+            setChildren(childrenRes.data.sort((a, b) => a.order - b.order));
         } catch (err) {
-            console.error('Failed to fetch submenu data:', err);
+            console.error('Failed to fetch children data:', err);
             const errorMessage = err.response && err.response.data.message
                 ? err.response.data.message
-                : 'Failed to load submenu data. Please try again.';
+                : 'Failed to load children data. Please try again.';
             setError(errorMessage);
             showSnackbar(errorMessage, 'error');
         } finally {
@@ -56,54 +70,57 @@ const SubmenuManagementPage = () => {
     };
 
     useEffect(() => {
-        if (menuId) {
+        // Fetch data only if parentId and parentModel are present in URL
+        if (parentId && parentModel) {
             fetchData();
         }
-    }, [menuId]); // Refetch if menuId changes
+    }, [parentId, parentModel]); // Refetch if parentId or parentModel changes
 
     // Dialog Handlers
     const handleOpenAddDialog = () => {
-        setCurrentSubmenu(null);
-        setSubmenuName('');
-        setSubmenuOrder(submenus.length > 0 ? Math.max(...submenus.map(s => s.order)) + 1 : 0);
+        setCurrentChild(null);
+        setChildName('');
+        // Suggest next order based on existing children
+        setChildOrder(children.length > 0 ? Math.max(...children.map(c => c.order)) + 1 : 0);
         setTemplateType('');
-        setContentItems(''); // Clear content items
+        setContentItems('');
         setOpenDialog(true);
     };
 
-    const handleOpenEditDialog = (submenu) => {
-        setCurrentSubmenu(submenu);
-        setSubmenuName(submenu.name);
-        setSubmenuOrder(submenu.order);
-        setTemplateType(submenu.templateType);
+    const handleOpenEditDialog = (child) => {
+        setCurrentChild(child);
+        setChildName(child.name);
+        setChildOrder(child.order);
+        setTemplateType(child.templateType);
         // Convert array back to JSON string for editing
-        setContentItems(submenu.contentItems ? JSON.stringify(submenu.contentItems, null, 2) : '');
+        setContentItems(child.contentItems ? JSON.stringify(child.contentItems, null, 2) : '');
         setOpenDialog(true);
     };
 
     const handleCloseDialog = () => {
         setOpenDialog(false);
-        setCurrentSubmenu(null);
-        setSubmenuName('');
-        setSubmenuOrder(0);
+        setCurrentChild(null);
+        setChildName('');
+        setChildOrder(0);
         setTemplateType('');
         setContentItems('');
         setError(null); // Clear dialog-specific errors
     };
 
-    // Add/Update Submenu Submission
-    const handleSubmitSubmenu = async () => {
-        setError(null); // Clear form-specific error
+    // Add/Update Child Submission
+    const handleSubmitChild = async () => {
+        setError(null);
         try {
             const config = {
                 headers: {
                     Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json', // Ensure content type is JSON
+                    'Content-Type': 'application/json',
                 },
             };
 
             let parsedContentItems = [];
-            if (templateType !== 'submenu' && contentItems) {
+            // Only parse contentItems if templateType is not 'submenu' AND contentItems string is not empty
+            if (templateType && templateType !== 'submenu' && contentItems) {
                 try {
                     parsedContentItems = JSON.parse(contentItems);
                     if (!Array.isArray(parsedContentItems)) {
@@ -112,49 +129,48 @@ const SubmenuManagementPage = () => {
                 } catch (e) {
                     setError('Invalid JSON for Content Items. Please ensure it\'s a valid JSON array.');
                     showSnackbar('Invalid JSON for Content Items.', 'error');
-                    return; // Stop submission if JSON is invalid
+                    return;
                 }
             }
 
-            const submenuData = {
-                name: submenuName,
-                order: Number(submenuOrder),
+            const childData = {
+                name: childName,
+                order: Number(childOrder),
                 templateType: templateType,
-                menuId: menuId, // Ensure menuId is always sent
+                parentId: parentId,     // <--- Crucial: Use current parentId from URL
+                parentModel: parentModel, // <--- Crucial: Use current parentModel from URL
             };
 
-            // Only add contentItems to payload if templateType is not 'submenu'
             if (templateType !== 'submenu') {
-                submenuData.contentItems = parsedContentItems;
+                childData.contentItems = parsedContentItems;
             } else {
-                // For 'submenu' type, ensure contentItems are not sent or are empty
-                submenuData.contentItems = [];
+                childData.contentItems = []; // Ensure contentItems are empty for 'submenu' type
             }
 
-            if (currentSubmenu) {
-                // Update existing submenu
-                await axios.put(`/submenus/${currentSubmenu._id}`, submenuData, config);
-                showSnackbar('Submenu updated successfully!', 'success');
+            if (currentChild) {
+                // Update existing child
+                await axios.put(`/submenus/${currentChild._id}`, childData, config);
+                showSnackbar('Child updated successfully!', 'success');
             } else {
-                // Add new submenu
-                await axios.post('/submenus', submenuData, config);
-                showSnackbar('Submenu added successfully!', 'success');
+                // Add new child
+                await axios.post('/submenus', childData, config);
+                showSnackbar('Child added successfully!', 'success');
             }
-            fetchData(); // Re-fetch submenus to update the list
-            handleCloseDialog(); // Close the dialog
+            fetchData(); // Re-fetch children to update the list
+            handleCloseDialog();
         } catch (err) {
-            console.error('Submenu operation failed:', err);
+            console.error('Child operation failed:', err);
             const errorMessage = err.response && err.response.data.message
                 ? err.response.data.message
-                : 'An error occurred during submenu operation.';
+                : 'An error occurred during child operation.';
             setError(errorMessage);
             showSnackbar(errorMessage, 'error');
         }
     };
 
-    // Delete Submenu
-    const handleDeleteSubmenu = async (submenuId) => {
-        if (window.confirm('Are you sure you want to delete this submenu?')) {
+    // Delete Child
+    const handleDeleteChild = async (childId) => {
+        if (window.confirm('Are you sure you want to delete this item? If it is a parent to other submenus, they will become orphaned.')) {
             setError(null);
             try {
                 const config = {
@@ -162,14 +178,14 @@ const SubmenuManagementPage = () => {
                         Authorization: `Bearer ${token}`,
                     },
                 };
-                await axios.delete(`/submenus/${submenuId}`, config);
-                showSnackbar('Submenu deleted successfully!', 'success');
-                fetchData(); // Re-fetch submenus
+                await axios.delete(`/submenus/${childId}`, config);
+                showSnackbar('Child deleted successfully!', 'success');
+                fetchData(); // Re-fetch children
             } catch (err) {
-                console.error('Failed to delete submenu:', err);
+                console.error('Failed to delete child:', err);
                 const errorMessage = err.response && err.response.data.message
                     ? err.response.data.message
-                    : 'An error occurred during submenu deletion.';
+                    : 'An error occurred during child deletion.';
                 setError(errorMessage);
                 showSnackbar(errorMessage, 'error');
             }
@@ -190,46 +206,72 @@ const SubmenuManagementPage = () => {
         setSnackbarOpen(false);
     };
 
-    // Check if add button should be disabled (based on 5 submenu limit per menu)
-    const isAddButtonDisabled = submenus.length >= 5;
+    // Check if add button should be disabled (based on 5 child limit per parent)
+    const isAddButtonDisabled = children.length >= 5;
+
+    // Determine the previous path for breadcrumbs/back button
+    let backPath = '/admin/menus'; // Default back to menu management
+
+    // If parentModel is 'Submenu', we need to go back to its parent
+    // This is complex for arbitrary nesting without knowing the grandparent
+    // For simplicity, for now, we'll go back to MenuManagement for any level.
+    // A full solution for breadcrumbs in arbitrary nesting would need a stack of visited parents.
+    // For now, let's make a decision: back to parentMenu for submenus, or a specific admin page.
+    // Let's create a simpler breadcrumb for now that goes to MenuManagementPage if parent is a menu,
+    // or just indicates the current path if it's a submenu.
+    const breadcrumbLinks = [
+        <Button
+            variant="text"
+            color="inherit"
+            component={RouterLink}
+            to="/admin"
+            startIcon={<ArrowBack />}
+            key="admin-dash"
+        >
+            Admin Dashboard
+        </Button>,
+        <Button
+            variant="text"
+            color="inherit"
+            component={RouterLink}
+            to="/admin/menus"
+            key="menu-mgmt"
+        >
+            Menu Management
+        </Button>,
+    ];
+    // If the current parent is a Submenu, we add its path to breadcrumbs
+    // Note: For true multi-level breadcrumbs, you'd need to fetch ancestor names.
+    // For simplicity, we'll just show the current parent name.
+    if (parentModel === 'Submenu') {
+         // You'd ideally link to the parent's parent here.
+         // For now, we'll just show the current level.
+    }
+    breadcrumbLinks.push(
+        <Typography color="text.primary" key="current-parent">
+            {parentModel === 'Menu' ? 'Children for Menu: ' : 'Children for Submenu: '} "{parentName || 'Loading...'}"
+        </Typography>
+    );
+
 
     return (
         <Box sx={{ mt: 4 }}>
             <Breadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
-                <Button
-                    variant="text"
-                    color="inherit"
-                    component={RouterLink}
-                    to="/admin"
-                    startIcon={<ArrowBack />}
-                >
-                    Admin Dashboard
-                </Button>
-                <Button
-                    variant="text"
-                    color="inherit"
-                    component={RouterLink}
-                    to="/admin/menus"
-                    startIcon={<ArrowBack />} // Maybe not back icon here, just for consistency
-                >
-                    Menu Management
-                </Button>
-                <Typography color="text.primary">Submenus for "{menuName || 'Loading...'}"</Typography>
+                {breadcrumbLinks}
             </Breadcrumbs>
 
-
             <Typography variant="h4" gutterBottom component="h1">
-                Submenu Management for "{menuName || 'Loading...'}"
+                Manage Children for {parentModel}: "{parentName || 'Loading...'}"
             </Typography>
 
             <Button
                 variant="contained"
                 color="primary"
                 onClick={handleOpenAddDialog}
-                disabled={isAddButtonDisabled || loading} // Disable if limit reached or still loading parent menu name
+                disabled={isAddButtonDisabled || loading}
                 sx={{ mb: 3 }}
             >
-                {isAddButtonDisabled ? 'Maximum 5 Submenus Reached' : 'Add New Submenu'}
+                {isAddButtonDisabled ? `Maximum 5 Children Reached for this ${parentModel}` : 'Add New Child'}
             </Button>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -238,49 +280,70 @@ const SubmenuManagementPage = () => {
                 <Box display="flex" justifyContent="center" py={4}>
                     <CircularProgress />
                 </Box>
-            ) : submenus.length === 0 ? (
-                <Typography variant="body1" color="text.secondary">No submenus found for this menu. Add your first submenu!</Typography>
+            ) : children.length === 0 ? (
+                <Typography variant="body1" color="text.secondary">No children found for this {parentModel}. Add your first child!</Typography>
             ) : (
                 <Paper elevation={2}>
                     <List>
-                        {submenus.map((submenu) => (
-                            <ListItem key={submenu._id} divider
-                            secondaryAction={
-                                <>
-                                <IconButton edge="end" aria-label="edit" onClick={() => handleOpenEditDialog(submenu)}>
-                                    <Edit />
-                                </IconButton>
-                                <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteSubmenu(submenu._id)}>
-                                    <Delete />
-                                </IconButton>
-                                </>
-                            }
-                            >
+                        {children.map((child) => (
+                            <ListItem
+                                key={child._id}
+                                divider
+                                secondaryAction={
+                                    <>
+                                    {/* If templateType is 'submenu', allow drilling down to manage its children */}
+                                    {child.templateType === 'submenu' && (
+                                        <IconButton
+                                        edge="end"
+                                        aria-label="manage-children"
+                                        component={RouterLink}
+                                        to={`/admin/nav/Submenu/${child._id}/children`}
+                                        sx={{ mr: 1 }}
+                                        >
+                                        <AddCircleOutline />
+                                        </IconButton>
+                                    )}
+                                    <IconButton edge="end" aria-label="edit" onClick={() => handleOpenEditDialog(child)}>
+                                        <Edit />
+                                    </IconButton>
+                                    <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteChild(child._id)}>
+                                        <Delete />
+                                    </IconButton>
+                                    </>
+                                }
+                                >
                                 <ListItemText
-                                    primary={submenu.name}
-                                    secondary={`Order: ${submenu.order} | Type: ${submenu.templateType} ${submenu.contentItems && submenu.contentItems.length > 0 ? `| Items: ${submenu.contentItems.length}` : ''}`}
+                                    primary={child.name}
+                                    secondary={
+                                    <>
+                                        Order: {child.order} | Type: {child.templateType}
+                                        {child.templateType !== 'submenu' && child.contentItems && child.contentItems.length > 0 &&
+                                        ` | Items: ${child.contentItems.length}`}
+                                    </>
+                                    }
                                 />
                             </ListItem>
+
                         ))}
                     </List>
                 </Paper>
             )}
 
-            {/* Add/Edit Submenu Dialog */}
+            {/* Add/Edit Child Dialog */}
             <Dialog open={openDialog} onClose={handleCloseDialog} fullWidth maxWidth="sm">
-                <DialogTitle>{currentSubmenu ? 'Edit Submenu' : 'Add New Submenu'}</DialogTitle>
+                <DialogTitle>{currentChild ? 'Edit Child' : 'Add New Child'}</DialogTitle>
                 <DialogContent>
                     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
                     <TextField
                         autoFocus
                         margin="dense"
                         id="name"
-                        label="Submenu Name"
+                        label="Child Name"
                         type="text"
                         fullWidth
                         variant="outlined"
-                        value={submenuName}
-                        onChange={(e) => setSubmenuName(e.target.value)}
+                        value={childName}
+                        onChange={(e) => setChildName(e.target.value)}
                         sx={{ mt: 1 }}
                     />
                     <TextField
@@ -290,8 +353,8 @@ const SubmenuManagementPage = () => {
                         type="number"
                         fullWidth
                         variant="outlined"
-                        value={submenuOrder}
-                        onChange={(e) => setSubmenuOrder(Number(e.target.value))}
+                        value={childOrder}
+                        onChange={(e) => setChildOrder(Number(e.target.value))}
                         sx={{ mt: 2 }}
                     />
                     <FormControl fullWidth margin="dense" sx={{ mt: 2 }}>
@@ -325,13 +388,14 @@ const SubmenuManagementPage = () => {
                             value={contentItems}
                             onChange={(e) => setContentItems(e.target.value)}
                             sx={{ mt: 2 }}
-                            helperText="Enter content items as a valid JSON array "                        />
+                            helperText="Enter content items as a valid JSON array"
+                        />
                     )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCloseDialog}>Cancel</Button>
-                    <Button onClick={handleSubmitSubmenu} variant="contained" color="primary">
-                        {currentSubmenu ? 'Update' : 'Add'}
+                    <Button onClick={handleSubmitChild} variant="contained" color="primary">
+                        {currentChild ? 'Update' : 'Add'}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -346,4 +410,4 @@ const SubmenuManagementPage = () => {
     );
 };
 
-export default SubmenuManagementPage;
+export default ChildrenManagementPage;

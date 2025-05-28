@@ -1,5 +1,7 @@
+// my-web-app/server/models/Submenu.js
 import { Schema, model } from 'mongoose';
 
+// Define the schema for our Submenu model
 const submenuSchema = Schema(
     {
         name: {
@@ -7,37 +9,41 @@ const submenuSchema = Schema(
             required: [true, 'Please add a submenu name'],
             trim: true,
         },
-        menuId: {
+        // NEW: Parent ID - can reference either a Menu or another Submenu
+        // Mongoose's `ref` property enforces a specific model type.
+        // When dealing with dynamic references (polymorphic associations),
+        // you typically omit `ref` here and enforce the type in the controller logic
+        // based on `parentModel` field.
+        parentId: {
             type: Schema.Types.ObjectId,
             required: true,
-            ref: 'Menu',
+            // No 'ref' here because it's dynamic. We'll use parentModel field.
+        },
+        // NEW: Parent Model Type - indicates whether parentId refers to 'Menu' or 'Submenu'
+        parentModel: {
+            type: String,
+            required: true,
+            enum: ['Menu', 'Submenu'], // Must be 'Menu' or 'Submenu'
         },
         templateType: {
             type: String,
-            required: [true, 'Please select a template type'],
+            required: true,
             enum: ['grid', 'gallery', 'table', 'submenu'],
+            default: 'submenu', // Good default as it can itself have children
         },
         order: {
             type: Number,
             default: 0,
         },
-        contentItems: { // New field for content data (e.g., file paths)
-            type: Array, // Can store an array of objects
+        contentItems: {
+            type: Array, // Stores any arbitrary content related to this submenu
             default: [],
-            // This field will only be relevant for 'grid', 'gallery', 'table' template types
-            // We'll manage its usage in the controller.
         },
-        // If templateType is 'submenu', you might want to add a 'parentSubmenuId' for nested submenus
-        // For now, we'll keep it flat, but this is a future consideration.
-        // parentSubmenuId: {
-        //     type: mongoose.Schema.Types.ObjectId,
-        //     ref: 'Submenu',
-        //     default: null,
-        // },
     },
     {
-        timestamps: true,
+        timestamps: true, // Automatically adds createdAt and updatedAt fields
     }
 );
 
+// Create the Mongoose model from the schema
 export const Submenu = model('Submenu', submenuSchema);

@@ -3,6 +3,7 @@ import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
 import AdminDashboardPage from '../pages/AdminDashboardPage';
 import DashboardPage from '../pages/DashboardPage';
+import MenuManagementPage from '../pages/MenuManagementPage';
 import HomePage from '../pages/HomePage';
 import AuthLayout from '../layouts/AuthLayout';
 import MainLayout from '../layouts/MainLayout';
@@ -58,7 +59,6 @@ const router = createBrowserRouter([
                     </PrivateRoute>
                 ),
             },
-            // Other protected routes will go here
             {
                 path: '/admin', // Main admin route
                 element: (
@@ -67,6 +67,15 @@ const router = createBrowserRouter([
                     </AdminRoute>
                 ),
             },
+             {
+                path: '/admin/menus', // NEW ROUTE for Menu Management
+                element: (
+                    <AdminRoute>
+                        <MenuManagementPage />
+                    </AdminRoute>
+                ),
+            },
+            // ... other protected routes will go here
             // We will add '/admin/menus' and '/admin/submenus' later,
             // they will also be wrapped by AdminRoute
 

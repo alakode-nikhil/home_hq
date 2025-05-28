@@ -1,15 +1,16 @@
+// client/src/layouts/MainLayout.jsx
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Button } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // Import useAuth
+import { useAuth } from '../context/AuthContext';
 
 const MainLayout = () => {
     const navigate = useNavigate();
-    const { isAuthenticated, user, logout } = useAuth(); // Use auth context
+    const { isAuthenticated, user, logout } = useAuth(); // Destructure user to get role
 
     const handleLogout = () => {
-        logout(); // Call logout function from context
+        logout();
         navigate('/login');
     };
 
@@ -25,13 +26,18 @@ const MainLayout = () => {
                     {isAuthenticated ? (
                         <>
                             <Typography variant="body1" sx={{ mr: 2 }}>
-                                Welcome, {user?.username || 'User'}! {/* Display username if available */}
+                                Welcome, {user?.username || 'User'}!
                             </Typography>
-                            <Button color="inherit" onClick={handleLogout}>
-                                Logout
-                            </Button>
+                            {user?.role === 'admin' && ( // ONLY show if user is an admin
+                                <Button color="inherit" component={RouterLink} to="/admin">
+                                    Admin
+                                </Button>
+                            )}
                             <Button color="inherit" component={RouterLink} to="/dashboard">
                                 Dashboard
+                            </Button>
+                            <Button color="inherit" onClick={handleLogout}>
+                                Logout
                             </Button>
                         </>
                     ) : (
